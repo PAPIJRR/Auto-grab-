@@ -1,67 +1,115 @@
--- Auto Grab Brainrots (Owner / Game Feature)
--- Server-Side & Adjustable
-
+-- Pro Scripters V12 | Auto Grab System
+-- Server-side safe for your game
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- SETTINGS YOU CAN CHANGE 🔧
-local AUTO_GRAB_RANGE = 20        -- studs
-local AUTO_GRAB_SPEED = 0.3       -- seconds (LOWER = FASTER)
--- Examples:
--- 1.0 = slow
--- 0.5 = medium
--- 0.1 = very fast
-
--- OPTIONAL: per-player toggle
-local AUTO_GRAB_ENABLED = true
-
--- VALUE MAP (match your game)
+-- CONFIG
 local BrainrotValues = {
 	Common = 5,
 	Rare = 15,
 	Epic = 40,
 	Legendary = 120
 }
+local AUTO_GRAB_RANGE = 20
 
-local function autoGrab(player, character)
-	while character.Parent and AUTO_GRAB_ENABLED do
-		task.wait(AUTO_GRAB_SPEED)
+-- REMOTES
+local remotes = ReplicatedStorage:FindFirstChild("ProScriptersRemotes") or Instance.new("Folder")
+remotes.Name = "ProScriptersRemotes"
+remotes.Parent = ReplicatedStorage
 
-		local root = character:FindFirstChild("HumanoidRootPart")
-		if not root then continue end
+local toggleRemote = Instance.new("RemoteEvent")
+toggleRemote.Name = "ToggleAutoGrab"
+toggleRemote.Parent = remotes
 
-		local brainrotFolder = Workspace:FindFirstChild("Brainrots")
-		if not brainrotFolder then continue end
+local speedRemote = Instance.new("RemoteEvent")
+speedRemote.Name = "UpdateSpeed"
+speedRemote.Parent = remotes
 
-		for _, brainrot in ipairs(brainrotFolder:GetChildren()) do
-			if brainrot:IsA("BasePart") then
-				local distance = (brainrot.Position - root.Position).Magnitude
-				if distance <= AUTO_GRAB_RANGE then
-					local stats = player:FindFirstChild("leaderstats")
-					if not stats then continue end
+local teleportRemote = Instance.new("RemoteEvent")
+teleportRemote.Name = "TeleportBrainrot"
+teleportRemote.Parent = remotes
 
-					local brainrots = stats:FindFirstChild("Brainrots")
-					if not brainrots then continue end
-
-					local rarity = brainrot:FindFirstChild("Rarity")
-					local value = 5
-
-					if rarity and BrainrotValues[rarity.Value] then
-						value = BrainrotValues[rarity.Value]
-					end
-
-					brainrots.Value += value
-					brainrot:Destroy()
-				end
-			end
-		end
-	end
-end
+-- Player Settings
+local playerSettings = {}
 
 Players.PlayerAdded:Connect(function(player)
+	playerSettings[player] = {
+		autoGrabEnabled = false,
+		autoGrabSpeed = 0.3
+	}
+
 	player.CharacterAdded:Connect(function(character)
+		local root = character:WaitForChild("HumanoidRootPart")
+
+		-- Auto-Grab Loop
 		task.spawn(function()
-			autoGrab(player, character)
+			while character.Parent do
+				local settings = playerSettings[player]
+				if settings.autoGrabEnabled then
+					local folder = Workspace:FindFirstChild("Brainrots")
+					if folder then
+						for _, br in ipairs(folder:GetChildren()) do
+							if br:IsA("BasePart") and br.Parent == folder then
+								local distance = (br.Position - root.Position).Magnitude
+								if distance <= AUTO_GRAB_RANGE then
+									local stats = player:FindFirstChild("leaderstats")
+									if stats then
+										local brainrots = stats:FindFirstChild("Brainrots")
+										if brainrots then
+											local rarity = br:FindFirstChild("Rarity")
+											local value = 5
+											if rarity and BrainrotValues[rarity.Value] then
+												value = BrainrotValues[rarity.Value]
+											end
+											brainrots.Value += value
+											-- Magnet effect
+											br.Position = root.Position
+											br:Destroy()
+										end
+									end
+								end
+							end
+						end
+					end
+				end
+				task.wait(settings.autoGrabSpeed)
+			end
 		end)
 	end)
+end)
+
+-- REMOTE HANDLERS
+toggleRemote.OnServerEvent:Connect(function(player, enabled)
+	if playerSettings[player] then
+		playerSettings[player].autoGrabEnabled = enabled
+	end
+end)
+
+speedRemote.OnServerEvent:Connect(function(player, speed)
+	if playerSettings[player] then
+		playerSettings[player].autoGrabSpeed = math.clamp(speed, 0.05, 5)
+	end
+end)
+
+teleportRemote.OnServerEvent:Connect(function(player)
+	local char = player.Character
+	if not char then return end
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	local folder = Workspace:FindFirstChild("Brainrots")
+	if folder and #folder:GetChildren() > 0 then
+		local nearest, dist = nil, math.huge
+		for _, br in ipairs(folder:GetChildren()) do
+			local d = (br.Position - root.Position).Magnitude
+			if d < dist then
+				dist = d
+				nearest = br
+			end
+		end
+		if nearest then
+			root.CFrame = CFrame.new(nearest.Position + Vector3.new(0,3,0))
+		end
+	end
 end)
