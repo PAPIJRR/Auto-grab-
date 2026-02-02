@@ -1,0 +1,67 @@
+-- Auto Grab Brainrots (Owner / Game Feature)
+-- Server-Side & Adjustable
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+-- SETTINGS YOU CAN CHANGE 🔧
+local AUTO_GRAB_RANGE = 20        -- studs
+local AUTO_GRAB_SPEED = 0.3       -- seconds (LOWER = FASTER)
+-- Examples:
+-- 1.0 = slow
+-- 0.5 = medium
+-- 0.1 = very fast
+
+-- OPTIONAL: per-player toggle
+local AUTO_GRAB_ENABLED = true
+
+-- VALUE MAP (match your game)
+local BrainrotValues = {
+	Common = 5,
+	Rare = 15,
+	Epic = 40,
+	Legendary = 120
+}
+
+local function autoGrab(player, character)
+	while character.Parent and AUTO_GRAB_ENABLED do
+		task.wait(AUTO_GRAB_SPEED)
+
+		local root = character:FindFirstChild("HumanoidRootPart")
+		if not root then continue end
+
+		local brainrotFolder = Workspace:FindFirstChild("Brainrots")
+		if not brainrotFolder then continue end
+
+		for _, brainrot in ipairs(brainrotFolder:GetChildren()) do
+			if brainrot:IsA("BasePart") then
+				local distance = (brainrot.Position - root.Position).Magnitude
+				if distance <= AUTO_GRAB_RANGE then
+					local stats = player:FindFirstChild("leaderstats")
+					if not stats then continue end
+
+					local brainrots = stats:FindFirstChild("Brainrots")
+					if not brainrots then continue end
+
+					local rarity = brainrot:FindFirstChild("Rarity")
+					local value = 5
+
+					if rarity and BrainrotValues[rarity.Value] then
+						value = BrainrotValues[rarity.Value]
+					end
+
+					brainrots.Value += value
+					brainrot:Destroy()
+				end
+			end
+		end
+	end
+end
+
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(function(character)
+		task.spawn(function()
+			autoGrab(player, character)
+		end)
+	end)
+end)
